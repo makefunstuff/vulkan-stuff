@@ -10,6 +10,7 @@
 #include <glm/mat4x4.hpp>
 
 #include <stdio.h>
+#include <string.h>
 
 #include <vulkan/vulkan.h>
 
@@ -30,47 +31,43 @@ internal void Cleanup(GLFWwindow* window)
   glfwTerminate();
 }
 
-internal void
-InitVulkan()
-{
-  VkApplicationInfo appInfo;
-  appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-  appInfo.pApplicationName = "Vulkan Base";
-  appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
-  appInfo.pEngineName = "Some";
-  appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-  appInfo.apiVersion = VK_API_VERSION_1_0;
+#define VK_CHECK(result) if (result != VK_SUCCESS) { fprintf(stderr, "Vulkan error: %d\n", result); exit(EXIT_FAILURE); }
 
-  VkInstanceCreateInfo createInfo;
-  createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-  createInfo.pApplicationInfo = &appInfo;
+internal void InitVulkan() {
+    VkApplicationInfo appInfo = {
+        .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
+        .pApplicationName = "Vulkan Base",
+        .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
+        .pEngineName = "Some",
+        .engineVersion = VK_MAKE_VERSION(1, 0, 0),
+        .apiVersion = VK_API_VERSION_1_0,
+    };
 
-  uint32_t glfwExtensionCount = 0;
-  const char** glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
+    VkInstanceCreateInfo createInfo = {
+        .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
+        .pApplicationInfo = &appInfo,
+    };
 
-  createInfo.enabledLayerCount = 0;
+    uint32_t glfwExtensionCount = 0;
+    const char** glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
+    if (!glfwExtensions) {
+        fprintf(stderr, "Failed to get required GLFW extensions!\n");
+        exit(EXIT_FAILURE);
+    }
 
-  const char** requiredExtensions = (const char**) malloc(glfwExtensionCount * sizeof(char*));
+    // Stack allocation if glfwExtensionCount is reasonably small (e.g., 64)
+    const char* requiredExtensions[64];
+    assert(glfwExtensionCount + 1 <= sizeof(requiredExtensions) / sizeof(requiredExtensions[0]));
 
-  for (uint32_t i = 0; i < glfwExtensionCount; i++) {
-      requiredExtensions[i] = glfwExtensions[i];
-  }
+    // Copy GLFW extensions and add VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME
+    memcpy(requiredExtensions, glfwExtensions, glfwExtensionCount * sizeof(char*));
+    requiredExtensions[glfwExtensionCount] = VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME;
 
-  // Add VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME
-  requiredExtensions = (const char**) realloc(requiredExtensions, (glfwExtensionCount + 1) * sizeof(char*));
+    createInfo.enabledExtensionCount = glfwExtensionCount + 1;
+    createInfo.ppEnabledExtensionNames = requiredExtensions;
+    createInfo.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
 
-  requiredExtensions[glfwExtensionCount] = VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME;
-
-  createInfo.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
-  createInfo.enabledExtensionCount = glfwExtensionCount + 1;
-  createInfo.ppEnabledExtensionNames = requiredExtensions;
-
-  if (vkCreateInstance(&createInfo, NULL, &g_pvkApplicationState.vkInstance) != VK_SUCCESS) {
-      fprintf(stderr, "failed to create instance!\n");
-      exit(EXIT_FAILURE);
-  }
-
-  free(requiredExtensions);
+    VK_CHECK(vkCreateInstance(&createInfo, NULL, &g_pvkApplicationState.vkInstance));
 }
 
 
