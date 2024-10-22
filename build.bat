@@ -1,28 +1,24 @@
 @echo off
-setlocal
 
-mkdir build
+REM Set Vulkan SDK environment variables
+set VULKAN_SDK=C:\VulkanSDK\1.3.296.0
+set PATH=%VULKAN_SDK%\Bin;%VULKAN_SDK%\Bin32;%PATH%
+set INCLUDE=%VULKAN_SDK%\Include;%INCLUDE%
+set LIB=%VULKAN_SDK%\Lib;%VULKAN_SDK%\Lib32;%LIB%
+
+REM Add vcpkg paths for GLFW
+set VCPKG_ROOT=C:\Users\pluga\Code\vcpkg\installed\x64-windows
+set INCLUDE=%VCPKG_ROOT%\include;%INCLUDE%
+set LIB=%VCPKG_ROOT%\lib;%LIB%
+set PATH=%VCPKG_ROOT%\bin;%PATH%
+
+REM Call Visual Studio build tools
+call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
+
+REM Create build directory if it doesn't exist
+if not exist build mkdir build
+
+REM Build the main program with correct runtime and add shell32.lib
 pushd build
-
-call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat"
-
-set CFLAGS=/std:c11 /FC /W4 /Zl /wd4996 /nologo /Zi
-rem 'vendor code dir %USERPROFILE%\Code\vendor'
-set VENDOR_DIR=
-
-rem 'Thrid party headers'
-rem 'Example how to add include /I %VENDOR_DIR%\glfw\include /I %VENDOR_DIR%\glew\include /I %VENDOR_DIR%\cglm\include /I ..\include'
-set INCLUDE_L=
-
-rem 'Including vendor code provide pats to your 3rd pary libs'
-rem 'Example how to include libs %VENDOR_DIR%\glfw\lib-vc2022\glfw3.lib %VENDOR_DIR%\glew\lib\Release\x64\glew32s.lib User32.lib Shell32.lib Gdi32.lib opengl32.lib %VENDOR_DIR%\cglm\win\x64\Release\cglm.lib'
-
-set LIBS=
-
-rem 'list all files here'
-
-set FILES=..\src\main.c
-
-cl %CFLAGS% %INCLUDE_L% %FILES% /link %LIBS% /OUT:ogl.exe /DEBUG
-
+cl /EHsc /std:c11 /MD -Zi -FC -Fe:main.exe ..\src\main.cpp user32.lib gdi32.lib kernel32.lib glfw3.lib Vulkan-1.lib shell32.lib
 popd
