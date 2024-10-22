@@ -24,7 +24,8 @@ uint32_t g_uWindowHeight = 600;
 
 VkDebugUtilsMessengerEXT debugMessenger;
 VkInstance vkInstance;
-VkPhysicalDevice physialDevice = VK_NULL_HANDLE;
+VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
+VkDevice device;
 
 const std::vector<const char *> validationLayers = {
     "VK_LAYER_KHRONOS_validation"};
@@ -142,6 +143,7 @@ internal void Cleanup(GLFWwindow *window) {
     }
 
     vkDestroyInstance(vkInstance, NULL);
+    vkDestroyDevice(device, NULL);
     glfwDestroyWindow(window);
     glfwTerminate();
 }
@@ -245,13 +247,47 @@ void PickPhysicalDevice()
             vkGetPhysicalDeviceProperties(device, &deviceProperties);
 
             printf("Found device %s\n", deviceProperties.deviceName);
-            physialDevice = device;
+            physicalDevice = device;
             break;
         }
     }
 
-    if (physialDevice == VK_NULL_HANDLE) {
+    if (physicalDevice == VK_NULL_HANDLE) {
         printf("failed to find gpu with vulkan support!");
+        exit(EXIT_FAILURE);
+    }
+}
+
+void CreateLogicalDevice()
+{
+    QueueFamilyIndices indices = FindQueueFamilies(physicalDevice);
+
+    VkDeviceQueueCreateInfo queueCreateInfo = {0};
+    queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+    queueCreateInfo.queueFamilyIndex = indices.graphicsFamily;
+    queueCreateInfo.queueCount = 1;
+
+    float queuePriority = 1.0f;
+    queueCreateInfo.pQueuePriorities = &queuePriority;
+
+
+    VkPhysicalDeviceFeatures deviceFeatures = {0};
+    VkDeviceCreateInfo createInfo = {0};
+
+    createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+    createInfo.pQueueCreateInfos = &queueCreateInfo;
+    createInfo.pEnabledFeatures = &deviceFeatures;
+    createInfo.enabledExtensionCount = 0;
+
+    if (enableValidationLayers) {
+        createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
+        createInfo.ppEnabledLayerNames = validationLayers.data();
+    } else {
+        createInfo.enabledLayerCount = 0;
+    }
+
+    if (vkCreateDevice(physicalDevice, &createInfo, nullptr, &device) != VK_SUCCESS) {
+        printf("failed to create logical device\n");
         exit(EXIT_FAILURE);
     }
 }
@@ -277,6 +313,7 @@ int main()
     InitVulkan();
     SetupDebugMessenger();
     PickPhysicalDevice();
+    CreateLogicalDevice();
 
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
