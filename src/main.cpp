@@ -1,6 +1,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <map>
 #include <vulkan/vulkan_core.h>
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
@@ -15,6 +16,7 @@
 #include <glm/vec4.hpp>
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 uint32_t g_uWindowWidth = 800;
@@ -144,6 +146,30 @@ internal void Cleanup(GLFWwindow *window) {
     glfwTerminate();
 }
 
+struct QueueFamilyIndices {
+    uint32_t graphicsFamily;
+};
+internal QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device)
+{
+    QueueFamilyIndices indices;
+    uint32_t queueFamilyCount = 0;
+    vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
+
+    std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
+    vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
+
+    int i = 0;
+    for (const auto& queueFamily : queueFamilies) {
+        if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+            indices.graphicsFamily = i;
+        }
+
+        i++;
+    }
+
+    return indices;
+}
+
 internal void InitVulkan() {
     if (enableValidationLayers && !CheckValidationLayersSupport()) {
         printf("requested validation layers are not available\n");
@@ -190,7 +216,14 @@ internal void InitVulkan() {
 
 bool IsDeviceSuitable(VkPhysicalDevice device)
 {
-    return true;
+    VkPhysicalDeviceProperties deviceProperties;
+    VkPhysicalDeviceFeatures deviceFeatures;
+
+    vkGetPhysicalDeviceProperties(device, &deviceProperties);
+    vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
+
+    return deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU && deviceFeatures.geometryShader;
+
 }
 
 void PickPhysicalDevice()
@@ -200,14 +233,18 @@ void PickPhysicalDevice()
 
     if (deviceCount == 0) {
         printf("failed to find gpu with vulkan support!");
-        exit(ERROR_EXIT);
+        exit(EXIT_FAILURE);
     }
 
     std::vector<VkPhysicalDevice> devices(deviceCount);
-    vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data());
+    vkEnumeratePhysicalDevices(vkInstance, &deviceCount, devices.data());
 
     for (const auto& device : devices) {
         if (IsDeviceSuitable(device)) {
+            VkPhysicalDeviceProperties deviceProperties;
+            vkGetPhysicalDeviceProperties(device, &deviceProperties);
+
+            printf("Found device %s\n", deviceProperties.deviceName);
             physialDevice = device;
             break;
         }
@@ -215,7 +252,7 @@ void PickPhysicalDevice()
 
     if (physialDevice == VK_NULL_HANDLE) {
         printf("failed to find gpu with vulkan support!");
-        exit(ERROR_EXIT);
+        exit(EXIT_FAILURE);
     }
 }
 
@@ -239,6 +276,7 @@ int main()
 
     InitVulkan();
     SetupDebugMessenger();
+    PickPhysicalDevice();
 
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
