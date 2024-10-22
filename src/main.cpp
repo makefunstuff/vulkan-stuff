@@ -22,6 +22,7 @@ uint32_t g_uWindowHeight = 600;
 
 VkDebugUtilsMessengerEXT debugMessenger;
 VkInstance vkInstance;
+VkPhysicalDevice physialDevice = VK_NULL_HANDLE;
 
 const std::vector<const char *> validationLayers = {
     "VK_LAYER_KHRONOS_validation"};
@@ -187,7 +188,39 @@ internal void InitVulkan() {
     }
 }
 
-int main() {
+bool IsDeviceSuitable(VkPhysicalDevice device)
+{
+    return true;
+}
+
+void PickPhysicalDevice()
+{
+    uint32_t deviceCount = 0;
+    vkEnumeratePhysicalDevices(vkInstance, &deviceCount, nullptr);
+
+    if (deviceCount == 0) {
+        printf("failed to find gpu with vulkan support!");
+        exit(ERROR_EXIT);
+    }
+
+    std::vector<VkPhysicalDevice> devices(deviceCount);
+    vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data());
+
+    for (const auto& device : devices) {
+        if (IsDeviceSuitable(device)) {
+            physialDevice = device;
+            break;
+        }
+    }
+
+    if (physialDevice == VK_NULL_HANDLE) {
+        printf("failed to find gpu with vulkan support!");
+        exit(ERROR_EXIT);
+    }
+}
+
+int main()
+{
     if (!glfwInit()) {
         printf("Failed to initialize GLFW\n");
         return -1;
