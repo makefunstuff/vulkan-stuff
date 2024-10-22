@@ -3,8 +3,12 @@
 #include <cstdlib>
 #include <map>
 #include <vulkan/vulkan_core.h>
+#define VK_USE_PLATFORM_WIN32_KHR
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
+#define GLFW_EXPOSE_NATIVE_WIN32
+#include <GLFW/glfw3native.h>
+
 #include <vector>
 
 #define GLM_FORCE_RADIANS
@@ -26,6 +30,8 @@ VkDebugUtilsMessengerEXT debugMessenger;
 VkInstance vkInstance;
 VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
 VkDevice device;
+
+VkSurfaceKHR surface;
 
 const std::vector<const char *> validationLayers = {
     "VK_LAYER_KHRONOS_validation"};
@@ -144,6 +150,7 @@ internal void Cleanup(GLFWwindow *window) {
 
     vkDestroyInstance(vkInstance, NULL);
     vkDestroyDevice(device, NULL);
+    vkDestroySurfaceKHR(vkInstance, surface, nullptr);
     glfwDestroyWindow(window);
     glfwTerminate();
 }
@@ -292,6 +299,14 @@ void CreateLogicalDevice()
     }
 }
 
+void CreateWindowSurface(GLFWwindow* window)
+{
+    if (glfwCreateWindowSurface(vkInstance, window, nullptr, &surface) != VK_SUCCESS) {
+        printf("failed to create window surface\n");
+        exit(EXIT_FAILURE);
+    }
+}
+
 int main()
 {
     if (!glfwInit()) {
@@ -314,6 +329,7 @@ int main()
     SetupDebugMessenger();
     PickPhysicalDevice();
     CreateLogicalDevice();
+    CreateWindowSurface(window);
 
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
