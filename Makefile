@@ -1,5 +1,5 @@
 CC = clang++
-CFLAGS = -Wall -Wextra -std=c++11
+CFLAGS = -Wall -Wextra -std=c++17
 CFLAGS_DEBUG = $(CFLAGS) -g -O0
 CFLAGS_RELEASE = $(CFLAGS) -O2
 TARGET = vkmain
