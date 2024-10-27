@@ -33,6 +33,7 @@ VkDevice device;
 VkQueue graphicsQueue;
 
 VkSurfaceKHR surface;
+VkQueue presentQueue;
 
 const std::vector<const char *> validationLayers = {
     "VK_LAYER_KHRONOS_validation"};
@@ -118,7 +119,8 @@ std::vector<const char *> getRequiredExtensions() {
     return extensions;
 }
 
-internal bool CheckValidationLayersSupport() {
+internal bool CheckValidationLayersSupport()
+{
     uint32_t layerCount;
     vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
 
@@ -143,25 +145,27 @@ internal bool CheckValidationLayersSupport() {
     return true;
 }
 
-internal void Cleanup(GLFWwindow *window) {
+internal void Cleanup(GLFWwindow *window)
+{
 
     if (enableValidationLayers) {
         DestroyDebugUtilsMessengerEXT(vkInstance, debugMessenger, nullptr);
     }
 
+    vkDestroySurfaceKHR(vkInstance, surface, nullptr);
     vkDestroyInstance(vkInstance, NULL);
     vkDestroyDevice(device, NULL);
-    vkDestroySurfaceKHR(vkInstance, surface, nullptr);
     glfwDestroyWindow(window);
     glfwTerminate();
 }
 
 struct QueueFamilyIndices {
     int32_t graphicsFamily = -1;
+    int32_t presentFamily = -1;
 
     bool isComplete()
     {
-        return graphicsFamily != -1;
+        return graphicsFamily != -1 && presentFamily != -1;
     }
 };
 
@@ -177,8 +181,19 @@ internal QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device)
 
     int i = 0;
     for (const auto& queueFamily : queueFamilies) {
+        VkBool32 presentSupport = false;
+        vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &presentSupport);
+
+        if (presentSupport) {
+            indices.presentFamily = i;
+        }
+
         if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
             indices.graphicsFamily = i;
+        }
+
+        if (indices.presentFamily == indices.graphicsFamily) {
+            break;
         }
 
         if (indices.isComplete()) {
@@ -277,21 +292,28 @@ void CreateLogicalDevice()
     QueueFamilyIndices indices = FindQueueFamilies(physicalDevice);
 
 
+    // TODO(jurip): sometimes we need to create separate presentation queue
+    // when graphicsFamily index and presentation family indices are different
+    // currently lets assume that values are the same
     VkDeviceCreateInfo createInfo = {0};
 
-    VkDeviceQueueCreateInfo queueCreateInfo = {0};
+    if (indices.graphicsFamily == indices.presentFamily) {
+        VkDeviceQueueCreateInfo queueCreateInfo = {0};
 
-    queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-    queueCreateInfo.queueFamilyIndex = indices.graphicsFamily;
-    queueCreateInfo.queueCount = 1;
-    float queuePriority = 1.0f;
-    queueCreateInfo.pQueuePriorities = &queuePriority;
+        queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+        queueCreateInfo.queueFamilyIndex = indices.graphicsFamily;
+        queueCreateInfo.queueCount = 1;
+        float queuePriority = 1.0f;
+        queueCreateInfo.pQueuePriorities = &queuePriority;
 
-    VkPhysicalDeviceFeatures deviceFeatures = {0};
-    createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-    createInfo.pQueueCreateInfos = &queueCreateInfo;
-    createInfo.pEnabledFeatures = &deviceFeatures;
-
+        VkPhysicalDeviceFeatures deviceFeatures = {0};
+        createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+        createInfo.pQueueCreateInfos = &queueCreateInfo;
+        createInfo.queueCreateInfoCount = 1;
+    } else {
+        printf("TODO handle queues separately\n");
+        exit(EXIT_FAILURE);
+    }
 
     createInfo.enabledExtensionCount = 0;
 
@@ -308,6 +330,7 @@ void CreateLogicalDevice()
     }
 
     vkGetDeviceQueue(device, indices.graphicsFamily, 0, &graphicsQueue);
+    vkGetDeviceQueue(device, indices.presentFamily, 0, &presentQueue);
 }
 
 void CreateWindowSurface(GLFWwindow* window)
@@ -340,7 +363,6 @@ int main()
     SetupDebugMessenger();
     PickPhysicalDevice();
     CreateLogicalDevice();
-
     CreateWindowSurface(window);
 
     while (!glfwWindowShouldClose(window)) {
