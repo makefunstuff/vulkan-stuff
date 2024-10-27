@@ -3,11 +3,21 @@
 #include <cstdlib>
 #include <map>
 #include <vulkan/vulkan_core.h>
+
+// Platform-specific includes
+#if defined(__APPLE__)
+#define VK_USE_PLATFORM_MACOS_MVK
+#elif defined(_WIN32)
 #define VK_USE_PLATFORM_WIN32_KHR
+#endif
+
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
+
+#if defined(_WIN32)
 #define GLFW_EXPOSE_NATIVE_WIN32
 #include <GLFW/glfw3native.h>
+#endif
 
 #include <vector>
 
@@ -35,8 +45,18 @@ VkQueue graphicsQueue;
 VkSurfaceKHR surface;
 VkQueue presentQueue;
 
-const std::vector<const char *> validationLayers = {
-    "VK_LAYER_KHRONOS_validation"};
+const std::vector<const char*> validationLayers = {
+    "VK_LAYER_KHRONOS_validation"
+};
+
+const std::vector<const char*> deviceExtensions = {
+#if defined(__APPLE__)
+    "VK_KHR_portability_subset",
+    "VK_KHR_swapchain"
+#else
+    "VK_KHR_swapchain"
+#endif
+};
 
 #if NDEBUG
 const bool enableValidationLayers = false;
@@ -46,18 +66,16 @@ const bool enableValidationLayers = true;
 
 static VKAPI_ATTR VkBool32 VKAPI_CALL
 debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
-              VkDebugUtilsMessageTypeFlagsEXT messageType,
-              const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
-              void *pUserData) {
-
+             VkDebugUtilsMessageTypeFlagsEXT messageType,
+             const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
+             void* pUserData) {
     printf("validation layer: %s\n", pCallbackData->pMessage);
-
     return VK_FALSE;
 }
 
 void DestroyDebugUtilsMessengerEXT(VkInstance instance,
-                                   VkDebugUtilsMessengerEXT debugMessenger,
-                                   const VkAllocationCallbacks *pAllocator) {
+                                  VkDebugUtilsMessengerEXT debugMessenger,
+                                  const VkAllocationCallbacks* pAllocator) {
     auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(
         instance, "vkDestroyDebugUtilsMessengerEXT");
     if (func != nullptr) {
@@ -66,9 +84,9 @@ void DestroyDebugUtilsMessengerEXT(VkInstance instance,
 }
 
 VkResult CreateDebugUtilsMessengerEXT(
-    VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT *pCreateInfo,
-    const VkAllocationCallbacks *pAllocator,
-    VkDebugUtilsMessengerEXT *pDebugMessenger) {
+    VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo,
+    const VkAllocationCallbacks* pAllocator,
+    VkDebugUtilsMessengerEXT* pDebugMessenger) {
     auto func = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(
         instance, "vkCreateDebugUtilsMessengerEXT");
     if (func != nullptr) {
@@ -78,19 +96,19 @@ VkResult CreateDebugUtilsMessengerEXT(
     }
 }
 
-
-void populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo)
-{
+void populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo) {
     createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-    createInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-    createInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+    createInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
+                                VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+                                VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+    createInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+                            VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+                            VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
     createInfo.pfnUserCallback = debugCallback;
 }
 
-void SetupDebugMessenger()
-{
-
+void SetupDebugMessenger() {
     if (!enableValidationLayers)
         return;
 
@@ -98,40 +116,44 @@ void SetupDebugMessenger()
     populateDebugMessengerCreateInfo(createInfo);
 
     if (CreateDebugUtilsMessengerEXT(vkInstance, &createInfo, nullptr,
-                                     &debugMessenger) != VK_SUCCESS) {
+                                    &debugMessenger) != VK_SUCCESS) {
         printf("Failed to setup debug messenger\n");
         exit(EXIT_FAILURE);
     }
 }
 
-std::vector<const char *> getRequiredExtensions() {
+std::vector<const char*> getRequiredExtensions() {
     uint32_t glfwExtensionCount = 0;
-    const char **glfwExtensions;
+    const char** glfwExtensions;
     glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
 
-    std::vector<const char *> extensions(glfwExtensions,
-                                         glfwExtensions + glfwExtensionCount);
+    std::vector<const char*> extensions(glfwExtensions,
+                                      glfwExtensions + glfwExtensionCount);
 
     if (enableValidationLayers) {
         extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
     }
 
+#if defined(__APPLE__)
+    extensions.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
+    extensions.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
+#endif
+
     return extensions;
 }
 
-internal bool CheckValidationLayersSupport()
-{
+internal bool CheckValidationLayersSupport() {
     uint32_t layerCount;
     vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
 
     std::vector<VkLayerProperties> availableLayers(layerCount);
     vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
 
-    for (const char *layerName : validationLayers) {
+    for (const char* layerName : validationLayers) {
         bool layerFound = false;
 
-        for (const auto &layerProperties : availableLayers) {
-            if (strcmp(layerName, layerProperties.layerName)) {
+        for (const auto& layerProperties : availableLayers) {
+            if (strcmp(layerName, layerProperties.layerName) == 0) {  // Fixed comparison
                 layerFound = true;
                 break;
             }
@@ -145,16 +167,14 @@ internal bool CheckValidationLayersSupport()
     return true;
 }
 
-internal void Cleanup(GLFWwindow *window)
-{
-
+internal void Cleanup(GLFWwindow* window) {
     if (enableValidationLayers) {
         DestroyDebugUtilsMessengerEXT(vkInstance, debugMessenger, nullptr);
     }
 
     vkDestroySurfaceKHR(vkInstance, surface, nullptr);
-    vkDestroyInstance(vkInstance, NULL);
-    vkDestroyDevice(device, NULL);
+    vkDestroyDevice(device, nullptr);
+    vkDestroyInstance(vkInstance, nullptr);
     glfwDestroyWindow(window);
     glfwTerminate();
 }
@@ -163,21 +183,19 @@ struct QueueFamilyIndices {
     int32_t graphicsFamily = -1;
     int32_t presentFamily = -1;
 
-    bool isComplete()
-    {
-        return graphicsFamily != -1 && presentFamily != -1;
+    bool isComplete() {
+        return graphicsFamily >= 0 && presentFamily >= 0;
     }
 };
 
-
-internal QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device)
-{
+internal QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device) {
     QueueFamilyIndices indices;
     uint32_t queueFamilyCount = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
 
     std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
-    vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
+    vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount,
+                                            queueFamilies.data());
 
     int i = 0;
     for (const auto& queueFamily : queueFamilies) {
@@ -192,10 +210,6 @@ internal QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device)
             indices.graphicsFamily = i;
         }
 
-        if (indices.presentFamily == indices.graphicsFamily) {
-            break;
-        }
-
         if (indices.isComplete()) {
             break;
         }
@@ -204,6 +218,29 @@ internal QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device)
     }
 
     return indices;
+}
+
+bool CheckDeviceExtensionSupport(VkPhysicalDevice device) {
+    uint32_t extensionCount;
+    vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);
+
+    std::vector<VkExtensionProperties> availableExtensions(extensionCount);
+    vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount,
+                                        availableExtensions.data());
+
+    std::vector<const char*> requiredExtensions(deviceExtensions);
+
+    for (const auto& extension : availableExtensions) {
+        for (auto it = requiredExtensions.begin(); it != requiredExtensions.end(); ) {
+            if (strcmp(*it, extension.extensionName) == 0) {
+                it = requiredExtensions.erase(it);
+            } else {
+                ++it;
+            }
+        }
+    }
+
+    return requiredExtensions.empty();
 }
 
 internal void InitVulkan() {
@@ -224,24 +261,25 @@ internal void InitVulkan() {
     createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
     createInfo.pApplicationInfo = &appInfo;
 
-    VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo = {0};
+#if defined(__APPLE__)
+    createInfo.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+#endif
+
+    VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo = {};
     if (enableValidationLayers) {
         createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
         createInfo.ppEnabledLayerNames = validationLayers.data();
 
         populateDebugMessengerCreateInfo(debugCreateInfo);
-        createInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT*) &debugCreateInfo;
+        createInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT*)&debugCreateInfo;
     } else {
         createInfo.enabledLayerCount = 0;
-
         createInfo.pNext = nullptr;
     }
 
     auto extensions = getRequiredExtensions();
     createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
     createInfo.ppEnabledExtensionNames = extensions.data();
-
-    createInfo.enabledLayerCount = 0;
 
     VkResult result = vkCreateInstance(&createInfo, nullptr, &vkInstance);
     if (result != VK_SUCCESS) {
@@ -250,20 +288,18 @@ internal void InitVulkan() {
     }
 }
 
-bool IsDeviceSuitable(VkPhysicalDevice device)
-{
+bool IsDeviceSuitable(VkPhysicalDevice device) {
     QueueFamilyIndices indices = FindQueueFamilies(device);
-
-    return indices.isComplete();
+    bool extensionsSupported = CheckDeviceExtensionSupport(device);
+    return indices.isComplete() && extensionsSupported;
 }
 
-void PickPhysicalDevice()
-{
+void PickPhysicalDevice() {
     uint32_t deviceCount = 0;
     vkEnumeratePhysicalDevices(vkInstance, &deviceCount, nullptr);
 
     if (deviceCount == 0) {
-        printf("failed to find gpu with vulkan support!");
+        printf("failed to find gpu with vulkan support!\n");
         exit(EXIT_FAILURE);
     }
 
@@ -282,40 +318,39 @@ void PickPhysicalDevice()
     }
 
     if (physicalDevice == VK_NULL_HANDLE) {
-        printf("failed to find gpu with vulkan support!");
+        printf("failed to find suitable gpu!\n");
         exit(EXIT_FAILURE);
     }
 }
 
-void CreateLogicalDevice()
-{
+void CreateLogicalDevice() {
     QueueFamilyIndices indices = FindQueueFamilies(physicalDevice);
 
+    std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
+    std::vector<uint32_t> uniqueQueueFamilies = {
+        static_cast<uint32_t>(indices.graphicsFamily),
+        static_cast<uint32_t>(indices.presentFamily)
+    };
 
-    // TODO(jurip): sometimes we need to create separate presentation queue
-    // when graphicsFamily index and presentation family indices are different
-    // currently lets assume that values are the same
-    VkDeviceCreateInfo createInfo = {0};
-
-    if (indices.graphicsFamily == indices.presentFamily) {
-        VkDeviceQueueCreateInfo queueCreateInfo = {0};
-
+    float queuePriority = 1.0f;
+    for (uint32_t queueFamily : uniqueQueueFamilies) {
+        VkDeviceQueueCreateInfo queueCreateInfo = {};
         queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-        queueCreateInfo.queueFamilyIndex = indices.graphicsFamily;
+        queueCreateInfo.queueFamilyIndex = queueFamily;
         queueCreateInfo.queueCount = 1;
-        float queuePriority = 1.0f;
         queueCreateInfo.pQueuePriorities = &queuePriority;
-
-        VkPhysicalDeviceFeatures deviceFeatures = {0};
-        createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-        createInfo.pQueueCreateInfos = &queueCreateInfo;
-        createInfo.queueCreateInfoCount = 1;
-    } else {
-        printf("TODO handle queues separately\n");
-        exit(EXIT_FAILURE);
+        queueCreateInfos.push_back(queueCreateInfo);
     }
 
-    createInfo.enabledExtensionCount = 0;
+    VkPhysicalDeviceFeatures deviceFeatures = {};
+
+    VkDeviceCreateInfo createInfo = {};
+    createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+    createInfo.pQueueCreateInfos = queueCreateInfos.data();
+    createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
+    createInfo.pEnabledFeatures = &deviceFeatures;
+    createInfo.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
+    createInfo.ppEnabledExtensionNames = deviceExtensions.data();
 
     if (enableValidationLayers) {
         createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
@@ -333,16 +368,14 @@ void CreateLogicalDevice()
     vkGetDeviceQueue(device, indices.presentFamily, 0, &presentQueue);
 }
 
-void CreateWindowSurface(GLFWwindow* window)
-{
+void CreateWindowSurface(GLFWwindow* window) {
     if (glfwCreateWindowSurface(vkInstance, window, nullptr, &surface) != VK_SUCCESS) {
         printf("failed to create window surface\n");
         exit(EXIT_FAILURE);
     }
 }
 
-int main()
-{
+int main() {
     if (!glfwInit()) {
         printf("Failed to initialize GLFW\n");
         return -1;
@@ -350,7 +383,13 @@ int main()
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-    GLFWwindow *window = glfwCreateWindow(g_uWindowWidth, g_uWindowHeight,
+
+#if defined(__APPLE__)
+    // Required for macOS to make window work correctly
+    glfwWindowHint(GLFW_COCOA_RETINA_FRAMEBUFFER, GLFW_TRUE);
+#endif
+
+    GLFWwindow* window = glfwCreateWindow(g_uWindowWidth, g_uWindowHeight,
                                           "Vulkan window", nullptr, nullptr);
 
     if (!window) {
@@ -359,11 +398,12 @@ int main()
         return -1;
     }
 
+    // Create Vulkan surface before picking physical device
     InitVulkan();
+    CreateWindowSurface(window);
     SetupDebugMessenger();
     PickPhysicalDevice();
     CreateLogicalDevice();
-    CreateWindowSurface(window);
 
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
