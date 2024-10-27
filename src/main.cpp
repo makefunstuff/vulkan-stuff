@@ -30,6 +30,7 @@ VkDebugUtilsMessengerEXT debugMessenger;
 VkInstance vkInstance;
 VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
 VkDevice device;
+VkQueue graphicsQueue;
 
 VkSurfaceKHR surface;
 
@@ -156,8 +157,15 @@ internal void Cleanup(GLFWwindow *window) {
 }
 
 struct QueueFamilyIndices {
-    uint32_t graphicsFamily;
+    int32_t graphicsFamily = -1;
+
+    bool isComplete()
+    {
+        return graphicsFamily != -1;
+    }
 };
+
+
 internal QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device)
 {
     QueueFamilyIndices indices;
@@ -171,6 +179,10 @@ internal QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device)
     for (const auto& queueFamily : queueFamilies) {
         if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
             indices.graphicsFamily = i;
+        }
+
+        if (indices.isComplete()) {
+            break;
         }
 
         i++;
@@ -225,14 +237,9 @@ internal void InitVulkan() {
 
 bool IsDeviceSuitable(VkPhysicalDevice device)
 {
-    VkPhysicalDeviceProperties deviceProperties;
-    VkPhysicalDeviceFeatures deviceFeatures;
+    QueueFamilyIndices indices = FindQueueFamilies(device);
 
-    vkGetPhysicalDeviceProperties(device, &deviceProperties);
-    vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
-
-    return deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU && deviceFeatures.geometryShader;
-
+    return indices.isComplete();
 }
 
 void PickPhysicalDevice()
@@ -269,21 +276,23 @@ void CreateLogicalDevice()
 {
     QueueFamilyIndices indices = FindQueueFamilies(physicalDevice);
 
+
+    VkDeviceCreateInfo createInfo = {0};
+
     VkDeviceQueueCreateInfo queueCreateInfo = {0};
+
     queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
     queueCreateInfo.queueFamilyIndex = indices.graphicsFamily;
     queueCreateInfo.queueCount = 1;
-
     float queuePriority = 1.0f;
     queueCreateInfo.pQueuePriorities = &queuePriority;
 
-
     VkPhysicalDeviceFeatures deviceFeatures = {0};
-    VkDeviceCreateInfo createInfo = {0};
-
     createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
     createInfo.pQueueCreateInfos = &queueCreateInfo;
     createInfo.pEnabledFeatures = &deviceFeatures;
+
+
     createInfo.enabledExtensionCount = 0;
 
     if (enableValidationLayers) {
@@ -297,6 +306,8 @@ void CreateLogicalDevice()
         printf("failed to create logical device\n");
         exit(EXIT_FAILURE);
     }
+
+    vkGetDeviceQueue(device, indices.graphicsFamily, 0, &graphicsQueue);
 }
 
 void CreateWindowSurface(GLFWwindow* window)
@@ -329,6 +340,7 @@ int main()
     SetupDebugMessenger();
     PickPhysicalDevice();
     CreateLogicalDevice();
+
     CreateWindowSurface(window);
 
     while (!glfwWindowShouldClose(window)) {
