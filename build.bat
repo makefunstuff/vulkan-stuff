@@ -20,5 +20,5 @@ if not exist build mkdir build
 
 REM Build the main program with correct runtime and add shell32.lib
 pushd build
-cl /EHsc /std:c11 /MD -Zi -FC -Fe:main.exe ..\src\main.cpp user32.lib gdi32.lib kernel32.lib glfw3.lib Vulkan-1.lib shell32.lib
+cl /EHsc /std:c++17 /MD -Zi -FC -Fe:main.exe ..\src\main.cpp user32.lib gdi32.lib kernel32.lib glfw3.lib Vulkan-1.lib shell32.lib
 popd
