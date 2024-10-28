@@ -1,12 +1,15 @@
+#include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <locale>
 #include <map>
 #include <set>
 #include <algorithm>
 #include <string>
 #include <limits>
 #include <vulkan/vulkan_core.h>
+#include <fstream>
 
 // Platform-specific includes
 #if defined(__APPLE__)
@@ -36,6 +39,25 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+internal std::vector<char> readFile(const std::string& filename)
+{
+    std::ifstream file(filename, std::ios::ate | std::ios::binary);
+
+    if (!file.is_open()) {
+        printf("Failed to open file\n");
+        exit(EXIT_FAILURE);
+    }
+
+    size_t fileSize = (size_t) file.tellg();
+    std::vector<char> buffer(fileSize);
+
+    file.seekg(0);
+    file.read(buffer.data(), fileSize);
+    file.close();
+
+    return buffer;
+}
 
 struct QueueFamilyIndices {
     int32_t graphicsFamily = -1;
@@ -98,6 +120,22 @@ debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
 {
     printf("validation layer: %s\n", pCallbackData->pMessage);
     return VK_FALSE;
+}
+
+VkShaderModule CreateShaderModule(const std::vector<char>& code)
+{
+    VkShaderModuleCreateInfo createInfo = {};
+    createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    createInfo.codeSize = code.size();
+    createInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
+
+    VkShaderModule shaderModule;
+    if (vkCreateShaderModule(device, &createInfo, nullptr, &shaderModule) != VK_SUCCESS) {
+        printf("Could not create shader module\n");
+        exit(EXIT_FAILURE);
+    }
+
+    return shaderModule;
 }
 
 VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities, GLFWwindow* window)
@@ -567,6 +605,25 @@ void CreateImageViews()
     }
 }
 
+void CreateGraphicsPipeline()
+{
+    auto vertShaderCode = readFile("./vert.spv");
+    auto fragShaderCode = readFile("./frag.spv");
+
+
+    VkShaderModule vertShaderModule = CreateShaderModule(vertShaderCode);
+    VkShaderModule fragShaderModule = CreateShaderModule(fragShaderCode);
+
+    VkPipelineShaderStageCreateInfo vertShaderStageInfo = {};
+    vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
+    vertShaderStageInfo.module = vertShaderModule;
+    vertShaderStageInfo.pName = "main";
+
+    vkDestroyShaderModule(device, vertShaderModule, nullptr);
+    vkDestroyShaderModule(device, fragShaderModule, nullptr);
+}
+
 int main() {
     if (!glfwInit()) {
         printf("Failed to initialize GLFW\n");
@@ -598,6 +655,7 @@ int main() {
     CreateLogicalDevice();
     CreateSwapChain(window);
     CreateImageViews();
+    CreateGraphicsPipeline();
 
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
