@@ -35,6 +35,10 @@ debug: $(DEBUG_DIR)/$(TARGET)
 
 release: $(RELEASE_DIR)/$(TARGET)
 
+compile_shaders:
+	glslc res/shaders/shader.frag -o frag.spv && \
+	glslc res/shaders/shader.vert -o vert.spv
+
 # Debug build
 $(DEBUG_DIR)/$(TARGET): $(OBJS_DEBUG) | $(DEBUG_DIR)
 	$(CC) $(CFLAGS_DEBUG) $(LDFLAGS) $(RPATH) -o $@ $(OBJS_DEBUG) $(LIBS)
