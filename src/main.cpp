@@ -518,6 +518,7 @@ void CreateSwapChain(GLFWwindow* window)
 
     createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
 
+    createInfo.preTransform = swapChainSupport.capabilities.currentTransform;
     createInfo.presentMode = presentMode;
     createInfo.clipped = VK_TRUE;
 
@@ -529,39 +530,38 @@ void CreateSwapChain(GLFWwindow* window)
         exit(EXIT_FAILURE);
     }
 
-    swapChainImageFormat = surfaceFormat.format;
-    swapChainExtent = extent;
 
     vkGetSwapchainImagesKHR(device, swapChain, &imageCount, nullptr);
     swapChainImages.resize(imageCount);
     vkGetSwapchainImagesKHR(device, swapChain, &imageCount, swapChainImages.data());
+
+    swapChainImageFormat = surfaceFormat.format;
+    swapChainExtent = extent;
 }
 
 void CreateImageViews()
 {
     swapChainImageViews.resize(swapChainImages.size());
 
-    for (size_t i = 0; swapChainImages.size(); i++) {
+    for (size_t i = 0; i < swapChainImages.size(); i++) {
         VkImageViewCreateInfo createInfo = {};
         createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
         createInfo.image = swapChainImages[i];
-
         createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
         createInfo.format = swapChainImageFormat;
-
         createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
         createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
         createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
         createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-
         createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
         createInfo.subresourceRange.baseMipLevel = 0;
         createInfo.subresourceRange.levelCount = 1;
         createInfo.subresourceRange.baseArrayLayer = 0;
         createInfo.subresourceRange.layerCount = 1;
 
-        if (vkCreateImageView(device, &createInfo, nullptr, &swapChainImageViews[i])) {
-            printf("failed to create image view \n");
+        if (vkCreateImageView(device, &createInfo, nullptr, &swapChainImageViews[i]) != VK_SUCCESS) {
+
+            printf("Failed to initialize imageview\n");
             exit(EXIT_FAILURE);
         }
     }
@@ -597,6 +597,7 @@ int main() {
     PickPhysicalDevice();
     CreateLogicalDevice();
     CreateSwapChain(window);
+    CreateImageViews();
 
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
