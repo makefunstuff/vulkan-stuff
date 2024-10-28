@@ -620,6 +620,17 @@ void CreateGraphicsPipeline()
     vertShaderStageInfo.module = vertShaderModule;
     vertShaderStageInfo.pName = "main";
 
+    VkPipelineShaderStageCreateInfo fragShaderStageInfo = {};
+    fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+    fragShaderStageInfo.module = fragShaderModule;
+    fragShaderStageInfo.pName = "main";
+
+    VkPipelineShaderStageCreateInfo shaderStages[] = {
+        vertShaderStageInfo,
+        fragShaderStageInfo
+    };
+
     vkDestroyShaderModule(device, vertShaderModule, nullptr);
     vkDestroyShaderModule(device, fragShaderModule, nullptr);
 }
