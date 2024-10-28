@@ -1041,6 +1041,7 @@ int main() {
         glfwPollEvents();
         DrawFrame();
     }
+    vkDeviceWaitIdle(device);
 
     Cleanup(window);
     return 0;
