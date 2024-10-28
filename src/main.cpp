@@ -95,6 +95,7 @@ VkPipelineLayout pipelineLayout;
 VkPipeline graphicsPipeline;
 
 std::vector<VkImageView> swapChainImageViews;
+std::vector<VkFramebuffer> swapChainFramebuffers;
 
 const std::vector<const char*> validationLayers = {
     "VK_LAYER_KHRONOS_validation"
@@ -280,6 +281,9 @@ internal bool CheckValidationLayersSupport() {
 }
 
 internal void Cleanup(GLFWwindow* window) {
+    for (auto framebuffer : swapChainFramebuffers) {
+        vkDestroyFramebuffer(device, framebuffer, nullptr);
+    }
     vkDestroyPipeline(device, graphicsPipeline, nullptr);
     vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
     vkDestroyRenderPass(device, renderPass, nullptr);
@@ -797,6 +801,31 @@ void CreateGraphicsPipeline()
     vkDestroyShaderModule(device, fragShaderModule, nullptr);
 }
 
+void CreateFrameBuffers()
+{
+    swapChainFramebuffers.resize(swapChainImageViews.size());
+
+    for (size_t i = 0; i < swapChainImageViews.size(); i++) {
+        VkImageView attachments[] = {
+            swapChainImageViews[i]
+        };
+
+        VkFramebufferCreateInfo framebufferInfo{};
+        framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+        framebufferInfo.renderPass = renderPass;
+        framebufferInfo.attachmentCount = 1;
+        framebufferInfo.pAttachments = attachments;
+        framebufferInfo.width = swapChainExtent.width;
+        framebufferInfo.height = swapChainExtent.height;
+        framebufferInfo.layers = 1;
+
+        if (vkCreateFramebuffer(device, &framebufferInfo, nullptr, &swapChainFramebuffers[i]) != VK_SUCCESS) {
+            printf("Could not create frame buffer \n");
+            exit(EXIT_FAILURE);
+        }
+    }
+}
+
 int main() {
     if (!glfwInit()) {
         printf("Failed to initialize GLFW\n");
@@ -830,6 +859,8 @@ int main() {
     CreateImageViews();
     CreateRenderPass();
     CreateGraphicsPipeline();
+    CreateFrameBuffers();
+
 
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
