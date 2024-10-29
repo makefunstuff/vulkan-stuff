@@ -79,6 +79,8 @@ const int MAX_FRAMES_IN_FLIGHT = 2;
 uint32_t g_uWindowWidth = 800;
 uint32_t g_uWindowHeight = 600;
 
+GLFWwindow* g_window;
+
 VkDebugUtilsMessengerEXT debugMessenger;
 VkInstance vkInstance;
 VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
@@ -105,6 +107,8 @@ std::vector<VkCommandBuffer> commandBuffers;
 std::vector<VkSemaphore> imageAvailableSemaphores;
 std::vector<VkSemaphore> renderFinishedSemaphores;
 std::vector<VkFence> inFlightFences;
+
+bool framebufferResized = false;
 
 uint32_t currentFrame = 0;
 
@@ -246,6 +250,7 @@ void SetupDebugMessenger() {
     }
 }
 
+
 std::vector<const char*> getRequiredExtensions() {
     uint32_t glfwExtensionCount = 0;
     const char** glfwExtensions;
@@ -291,7 +296,22 @@ internal bool CheckValidationLayersSupport() {
     return true;
 }
 
-internal void Cleanup(GLFWwindow* window) {
+void CleanupSwapChain()
+{
+    for (size_t i = 0; i < swapChainFramebuffers.size(); i++) {
+        vkDestroyFramebuffer(device, swapChainFramebuffers[i], nullptr);
+    }
+
+    for (size_t i = 0; i < swapChainImageViews.size(); i++) {
+        vkDestroyImageView(device, swapChainImageViews[i], nullptr);
+    }
+
+    vkDestroySwapchainKHR(device, swapChain, nullptr);
+}
+
+internal void Cleanup() {
+    CleanupSwapChain();
+
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
         vkDestroySemaphore(device, renderFinishedSemaphores[i], nullptr);
         vkDestroySemaphore(device, imageAvailableSemaphores[i], nullptr);
@@ -317,7 +337,7 @@ internal void Cleanup(GLFWwindow* window) {
     vkDestroySurfaceKHR(vkInstance, surface, nullptr);
     vkDestroyDevice(device, nullptr);
     vkDestroyInstance(vkInstance, nullptr);
-    glfwDestroyWindow(window);
+    glfwDestroyWindow(g_window);
     glfwTerminate();
 }
 
@@ -534,21 +554,21 @@ void CreateLogicalDevice()
     vkGetDeviceQueue(device, indices.presentFamily, 0, &presentQueue);
 }
 
-void CreateWindowSurface(GLFWwindow* window)
+void CreateWindowSurface()
 {
-    if (glfwCreateWindowSurface(vkInstance, window, nullptr, &surface) != VK_SUCCESS) {
+    if (glfwCreateWindowSurface(vkInstance, g_window, nullptr, &surface) != VK_SUCCESS) {
         printf("failed to create window surface\n");
         exit(EXIT_FAILURE);
     }
 }
 
-void CreateSwapChain(GLFWwindow* window)
+void CreateSwapChain()
 {
     SwapChainSupportDetails swapChainSupport = QuerySwapChainSupport(physicalDevice);
 
     VkSurfaceFormatKHR surfaceFormat = ChooseSwapSurfaceFormat(swapChainSupport.formats);
     VkPresentModeKHR presentMode = ChooseSwapPresentMode(swapChainSupport.presentModes);
-    VkExtent2D extent = chooseSwapExtent(swapChainSupport.capabilities, window);
+    VkExtent2D extent = chooseSwapExtent(swapChainSupport.capabilities, g_window);
 
     uint32_t imageCount = swapChainSupport.capabilities.minImageCount + 1;
     if (swapChainSupport.capabilities.maxImageCount > 0 && imageCount > swapChainSupport.capabilities.maxImageCount) {
@@ -631,6 +651,50 @@ void CreateImageViews()
             exit(EXIT_FAILURE);
         }
     }
+}
+
+void CreateFrameBuffers()
+{
+
+    swapChainFramebuffers.resize(swapChainImageViews.size());
+
+    for (size_t i = 0; i < swapChainImageViews.size(); i++) {
+        VkImageView attachments[] = {
+            swapChainImageViews[i]
+        };
+
+        VkFramebufferCreateInfo framebufferInfo{};
+        framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+        framebufferInfo.renderPass = renderPass;
+        framebufferInfo.attachmentCount = 1;
+        framebufferInfo.pAttachments = attachments;
+        framebufferInfo.width = swapChainExtent.width;
+        framebufferInfo.height = swapChainExtent.height;
+        framebufferInfo.layers = 1;
+
+        if (vkCreateFramebuffer(device, &framebufferInfo, nullptr, &swapChainFramebuffers[i]) != VK_SUCCESS) {
+            printf("Could not create frame buffer \n");
+            exit(EXIT_FAILURE);
+        }
+    }
+}
+
+void RecreateSwapChain()
+{
+    int width = 0, height = 0;
+    glfwGetFramebufferSize(g_window, &width, &height);
+    while (width == 0 || height == 0) {
+        glfwGetFramebufferSize(g_window, &width, &height);
+        glfwWaitEvents();
+    }
+
+    vkDeviceWaitIdle(device);
+
+    CleanupSwapChain();
+
+    CreateSwapChain();
+    CreateImageViews();
+    CreateFrameBuffers();
 }
 
 void CreateRenderPass()
@@ -828,31 +892,6 @@ void CreateGraphicsPipeline()
     vkDestroyShaderModule(device, fragShaderModule, nullptr);
 }
 
-void CreateFrameBuffers()
-{
-
-    swapChainFramebuffers.resize(swapChainImageViews.size());
-
-    for (size_t i = 0; i < swapChainImageViews.size(); i++) {
-        VkImageView attachments[] = {
-            swapChainImageViews[i]
-        };
-
-        VkFramebufferCreateInfo framebufferInfo{};
-        framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-        framebufferInfo.renderPass = renderPass;
-        framebufferInfo.attachmentCount = 1;
-        framebufferInfo.pAttachments = attachments;
-        framebufferInfo.width = swapChainExtent.width;
-        framebufferInfo.height = swapChainExtent.height;
-        framebufferInfo.layers = 1;
-
-        if (vkCreateFramebuffer(device, &framebufferInfo, nullptr, &swapChainFramebuffers[i]) != VK_SUCCESS) {
-            printf("Could not create frame buffer \n");
-            exit(EXIT_FAILURE);
-        }
-    }
-}
 
 void CreateCommandPool()
 {
@@ -962,10 +1001,20 @@ void DrawFrame()
 {
 
     vkWaitForFences(device, 1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
-    vkResetFences(device, 1, &inFlightFences[currentFrame]);
 
     uint32_t imageIndex;
-    vkAcquireNextImageKHR(device, swapChain, UINT64_MAX, imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
+
+    VkResult result = vkAcquireNextImageKHR(device, swapChain, UINT64_MAX, imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
+
+    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || framebufferResized) {
+        framebufferResized = false;
+        RecreateSwapChain();
+        return;
+    } else if (result != VK_SUCCESS) {
+        printf("failed to acquire swapchain image!\n");
+        exit(EXIT_FAILURE);
+    }
+    vkResetFences(device, 1, &inFlightFences[currentFrame]);
 
     vkResetCommandBuffer(commandBuffers[currentFrame],  0);
 
@@ -1012,11 +1061,23 @@ void DrawFrame()
     presentInfo.pImageIndices = &imageIndex;
     presentInfo.pResults = nullptr; // Optional
 
-    vkQueuePresentKHR(presentQueue, &presentInfo);
+    result = vkQueuePresentKHR(presentQueue, &presentInfo);
+
+    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
+        RecreateSwapChain();
+    } else if (result != VK_SUCCESS) {
+        printf("failed to present swapchain image!\n");
+        exit(EXIT_FAILURE);
+    }
 
     currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
+
+static void framebufferResizeCallback(GLFWwindow* window, int width, int height)
+{
+    framebufferResized = true;
+}
 
 int main() {
     if (!glfwInit()) {
@@ -1032,10 +1093,12 @@ int main() {
     glfwWindowHint(GLFW_COCOA_RETINA_FRAMEBUFFER, GLFW_TRUE);
 #endif
 
-    GLFWwindow* window = glfwCreateWindow(g_uWindowWidth, g_uWindowHeight,
+    g_window = glfwCreateWindow(g_uWindowWidth, g_uWindowHeight,
                                           "Vulkan window", nullptr, nullptr);
 
-    if (!window) {
+    glfwSetFramebufferSizeCallback(g_window, framebufferResizeCallback);
+
+    if (!g_window) {
         printf("Failed to create GLFW window\n");
         glfwTerminate();
         return -1;
@@ -1043,11 +1106,11 @@ int main() {
 
     // Create Vulkan surface before picking physical device
     InitVulkan();
-    CreateWindowSurface(window);
+    CreateWindowSurface();
     SetupDebugMessenger();
     PickPhysicalDevice();
     CreateLogicalDevice();
-    CreateSwapChain(window);
+    CreateSwapChain();
     CreateImageViews();
     CreateRenderPass();
     CreateGraphicsPipeline();
@@ -1056,12 +1119,12 @@ int main() {
     CreateCommandBuffers();
     CreateSyncObjects();
 
-    while (!glfwWindowShouldClose(window)) {
+    while (!glfwWindowShouldClose(g_window)) {
         glfwPollEvents();
         DrawFrame();
     }
     vkDeviceWaitIdle(device);
 
-    Cleanup(window);
+    Cleanup();
     return 0;
 }
