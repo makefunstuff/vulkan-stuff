@@ -2,10 +2,12 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <glm/vector_relational.hpp>
 #include <locale>
 #include <map>
 #include <set>
 #include <algorithm>
+#include <array>
 #include <string>
 #include <limits>
 #include <vulkan/vulkan_core.h>
@@ -176,6 +178,9 @@ VkDescriptorSetLayout descriptorSetLayout;
 std::vector<VkBuffer> uniformBuffers;
 std::vector<VkDeviceMemory> uniformBuffersMemory;
 std::vector<void*> uniformBuffersMapped;
+
+VkDescriptorPool descriptorPool;
+std::vector<VkDescriptorSet> descriptorSets;
 
 const std::vector<const char*> validationLayers = {
     "VK_LAYER_KHRONOS_validation"
@@ -381,6 +386,8 @@ internal void Cleanup() {
     vkDestroyBuffer(device, vertexBuffer, nullptr);
     vkFreeMemory(device, vertexBufferMemory, nullptr);
     CleanupSwapChain();
+
+    vkDestroyDescriptorPool(devices, descriptorPool, nullptr);
 
     vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
 
@@ -1344,6 +1351,20 @@ void CreateUniformBuffers()
     }
 }
 
+void CreateDescriptorPool()
+{
+    std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, descriptorSetLayout);
+    VkDescriptorSetAllocateInfo allocInfo{};
+
+    allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    allocInfo.descriptorPool = descriptorPool;
+    allocInfo.descriptorSetCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+    allocInfo.pSetLayouts = layouts.data();
+
+    descriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
+    VK_CHECK(vkAllocateDescriptorSets(device, &allocInfo, descriptorSets.data()));
+}
+
 int main() {
     if (!glfwInit()) {
         printf("Failed to initialize GLFW\n");
@@ -1385,6 +1406,7 @@ int main() {
     CreateVertexBuffer();
     CreateIndexBuffer();
     CreateUniformBuffers();
+    CreateDescriptorPool();
     CreateCommandBuffers();
     CreateSyncObjects();
 
