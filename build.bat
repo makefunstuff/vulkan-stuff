@@ -23,6 +23,6 @@ pushd build
 cl /EHsc /std:c++17 /MD -Zi -FC -Fe:main.exe ..\src\main.cpp user32.lib gdi32.lib kernel32.lib glfw3.lib Vulkan-1.lib shell32.lib
 
 ECHO "compiling shaders"
-%VULKAN_SDK%\Bin\glslc.exe ..\res\shaders\shader.vert -o ..\vert.spv
-%VULKAN_SDK%\Bin\glslc.exe ..\res\shaders\shader.frag -o ..\frag.spv
+%VULKAN_SDK%\Bin\glslc.exe ..\res\shaders\shader.vert -o vert.spv
+%VULKAN_SDK%\Bin\glslc.exe ..\res\shaders\shader.frag -o frag.spv
 popd
