@@ -10,7 +10,6 @@
 #include <limits>
 #include <vulkan/vulkan_core.h>
 #include <fstream>
-#include <glm/glm.hpp>
 
 // Platform-specific includes
 #if defined(__APPLE__)
@@ -34,12 +33,26 @@
 
 #define internal static
 
-#include <glm/mat4x4.hpp>
-#include <glm/vec4.hpp>
+#define GLM_FORCE_RADIANS
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <chrono>
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#define VK_CHECK(call) \
+	do { \
+		VkResult result_ = call; \
+		assert(result_ == VK_SUCCESS); \
+	} while (0)
+
+struct UniformBufferObject {
+    glm::mat4 model;
+    glm::mat4 view;
+    glm::mat4 proj;
+};
 
 struct Vertex {
     glm::vec2 pos;
@@ -157,6 +170,12 @@ VkDeviceMemory vertexBufferMemory;
 
 VkBuffer indexBuffer;
 VkDeviceMemory indexBufferMemory;
+
+VkDescriptorSetLayout descriptorSetLayout;
+
+std::vector<VkBuffer> uniformBuffers;
+std::vector<VkDeviceMemory> uniformBuffersMemory;
+std::vector<void*> uniformBuffersMapped;
 
 const std::vector<const char*> validationLayers = {
     "VK_LAYER_KHRONOS_validation"
@@ -362,6 +381,14 @@ internal void Cleanup() {
     vkDestroyBuffer(device, vertexBuffer, nullptr);
     vkFreeMemory(device, vertexBufferMemory, nullptr);
     CleanupSwapChain();
+
+    vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
+
+
+    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+        vkDestroyBuffer(device, uniformBuffers[i], nullptr);
+        vkFreeMemory(device, uniformBuffersMemory[i], nullptr);
+    }
 
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
         vkDestroySemaphore(device, renderFinishedSemaphores[i], nullptr);
@@ -909,8 +936,8 @@ void CreateGraphicsPipeline()
 
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    pipelineLayoutInfo.setLayoutCount = 0; // Optional
-    pipelineLayoutInfo.pSetLayouts = nullptr; // Optional
+    pipelineLayoutInfo.setLayoutCount = 1;
+    pipelineLayoutInfo.pSetLayouts = &descriptorSetLayout;
     pipelineLayoutInfo.pushConstantRangeCount = 0; // Optional
     pipelineLayoutInfo.pPushConstantRanges = nullptr; // Optional
 
@@ -1057,6 +1084,23 @@ void CreateSyncObjects()
     }
 }
 
+void UpdateUniformBuffers(uint32_t currentImage)
+{
+    static auto startTime = std::chrono::high_resolution_clock::now();
+
+    auto currentTime = std::chrono::high_resolution_clock::now();
+    float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+
+    UniformBufferObject ubo{};
+    ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+    ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+    ubo.proj = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float) swapChainExtent.height, 0.1f, 10.0f);
+
+    ubo.proj[1][1] *= -1;
+
+    memcpy(uniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
+}
+
 void DrawFrame()
 {
 
@@ -1079,6 +1123,8 @@ void DrawFrame()
     vkResetCommandBuffer(commandBuffers[currentFrame],  0);
 
     RecordCommandBuffer(commandBuffers[currentFrame], imageIndex);
+
+    UpdateUniformBuffers(currentFrame);
 
     VkSubmitInfo submitInfo{};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -1266,6 +1312,38 @@ void CreateIndexBuffer() {
     vkFreeMemory(device, stagingBufferMemory, nullptr);
 }
 
+void CreateDescriptorSetLayout()
+{
+    VkDescriptorSetLayoutBinding uboLayoutBinding{};
+    uboLayoutBinding.binding = 0;
+    uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    uboLayoutBinding.descriptorCount = 1;
+    uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    uboLayoutBinding.pImmutableSamplers = nullptr;
+
+    VkDescriptorSetLayoutCreateInfo layoutInfo{};
+    layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    layoutInfo.bindingCount = 1;
+    layoutInfo.pBindings = &uboLayoutBinding;
+
+    VK_CHECK(vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &descriptorSetLayout));
+}
+
+void CreateUniformBuffers()
+{
+    VkDeviceSize bufferSize = sizeof(UniformBufferObject);
+
+    uniformBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+    uniformBuffersMemory.resize(MAX_FRAMES_IN_FLIGHT);
+    uniformBuffersMapped.resize(MAX_FRAMES_IN_FLIGHT);
+
+    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+        CreateBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, uniformBuffers[i], uniformBuffersMemory[i]);
+
+        vkMapMemory(device, uniformBuffersMemory[i], 0, bufferSize, 0, &uniformBuffersMapped[i]);
+    }
+}
+
 int main() {
     if (!glfwInit()) {
         printf("Failed to initialize GLFW\n");
@@ -1300,11 +1378,13 @@ int main() {
     CreateSwapChain();
     CreateImageViews();
     CreateRenderPass();
+    CreateDescriptorSetLayout();
     CreateGraphicsPipeline();
     CreateFrameBuffers();
     CreateCommandPool();
     CreateVertexBuffer();
     CreateIndexBuffer();
+    CreateUniformBuffers();
     CreateCommandBuffers();
     CreateSyncObjects();
 
