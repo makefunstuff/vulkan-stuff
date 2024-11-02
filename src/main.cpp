@@ -15,6 +15,9 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
+#define TINYOBJLOADER_IMPLEMENTATION
+#include "tiny_obj_loader.h"
+//
 // Platform-specific includes
 #if defined(__APPLE__)
 #define VK_USE_PLATFORM_MACOS_MVK
@@ -96,23 +99,6 @@ struct Vertex {
     }
 };
 
-const std::vector<Vertex> vertices = {
-    {{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
-    {{0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
-    {{0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
-    {{-0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}},
-
-    {{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
-    {{0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
-    {{0.5f, 0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
-    {{-0.5f, 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}
-};
-
-const std::vector<uint16_t> indices = {
-    0, 1, 2, 2, 3, 0,
-    4, 5, 6, 6, 7, 4
-};
-
 internal std::vector<char> readFile(const std::string& filename)
 {
     std::ifstream file(filename, std::ios::ate | std::ios::binary);
@@ -152,6 +138,9 @@ const int MAX_FRAMES_IN_FLIGHT = 2;
 uint32_t g_uWindowWidth = 800;
 uint32_t g_uWindowHeight = 600;
 
+const std::string MODEL_PATH = "res/models/viking_room.obj";
+const std::string TEXTURE_PATH = "res/models/viking_room.png";
+
 GLFWwindow* g_window;
 
 VkDebugUtilsMessengerEXT debugMessenger;
@@ -185,6 +174,8 @@ bool framebufferResized = false;
 
 uint32_t currentFrame = 0;
 
+std::vector<Vertex> vertices;
+std::vector<uint32_t> indices;
 VkBuffer vertexBuffer;
 VkDeviceMemory vertexBufferMemory;
 
@@ -1151,7 +1142,7 @@ void RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex) {
 
     vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
 
-    vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT16);
+    vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[currentFrame], 0, nullptr);
 
@@ -1660,7 +1651,7 @@ void CreateTextureImage()
 {
     int texWidth, texHeight, texChannels;
 
-    stbi_uc* pixels = stbi_load("res/img/texture.jpg", &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+    stbi_uc* pixels = stbi_load(TEXTURE_PATH.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
     VkDeviceSize imageSize = texWidth * texHeight * 4;
 
     if (!pixels) {
@@ -1744,6 +1735,43 @@ VkFormat findSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTil
 
 }
 
+void LoadModel()
+{
+
+    tinyobj::attrib_t attrib;
+    std::vector<tinyobj::shape_t> shapes;
+    std::vector<tinyobj::material_t> materials;
+    std::string warn, err;
+
+    if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, MODEL_PATH.c_str())) {
+        printf("%s, %s", warn.c_str(), err.c_str());
+        exit(EXIT_FAILURE);
+    }
+
+
+    for (const auto& shape : shapes) {
+        for (const auto& index : shape.mesh.indices) {
+            Vertex vertex{};
+
+            vertex.pos = {
+                attrib.vertices[3 * index.vertex_index + 0],
+                attrib.vertices[3 * index.vertex_index + 1],
+                attrib.vertices[3 * index.vertex_index + 2]
+            };
+
+            vertex.texCoord = {
+                attrib.texcoords[2 * index.texcoord_index + 0],
+                1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
+            };
+
+            vertex.color = {1.0f, 1.0f, 1.0f};
+
+            vertices.push_back(vertex);
+            indices.push_back(indices.size());
+        }
+    }
+}
+
 int main() {
     if (!glfwInit()) {
         printf("Failed to initialize GLFW\n");
@@ -1787,8 +1815,11 @@ int main() {
     CreateTextureImage();
     CreateTextureImageView();
     CreateTextureSampler();
+
+    LoadModel();
     CreateVertexBuffer();
     CreateIndexBuffer();
+
     CreateUniformBuffers();
     CreateDescriptorPool();
     CreateDescriptorSets();
