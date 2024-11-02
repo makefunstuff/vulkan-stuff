@@ -188,6 +188,9 @@ std::vector<VkDescriptorSet> descriptorSets;
 VkImage textureImage;
 VkDeviceMemory textureImageMemory;
 
+VkImageView textureImageView;
+VkSampler textureSampler;
+
 const std::vector<const char*> validationLayers = {
     "VK_LAYER_KHRONOS_validation"
 };
@@ -231,6 +234,23 @@ VkShaderModule CreateShaderModule(const std::vector<char>& code)
     }
 
     return shaderModule;
+}
+
+VkImageView CreateImageView(VkImage image, VkFormat format) {
+    VkImageViewCreateInfo viewInfo{};
+    viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    viewInfo.image = image;
+    viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    viewInfo.format = format;
+    viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    viewInfo.subresourceRange.baseMipLevel = 0;
+    viewInfo.subresourceRange.levelCount = 1;
+    viewInfo.subresourceRange.baseArrayLayer = 0;
+    viewInfo.subresourceRange.layerCount = 1;
+
+    VkImageView imageView;
+    VK_CHECK(vkCreateImageView(device, &viewInfo, nullptr, &imageView));
+    return imageView;
 }
 
 VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities, GLFWwindow* window)
@@ -392,6 +412,9 @@ internal void Cleanup() {
     vkDestroyBuffer(device, vertexBuffer, nullptr);
     vkFreeMemory(device, vertexBufferMemory, nullptr);
     CleanupSwapChain();
+
+    vkDestroySampler(device, textureSampler, nullptr);
+    vkDestroyImageView(device, textureImageView, nullptr);
 
     vkDestroyImage(device, textureImage, nullptr);
     vkFreeMemory(device, textureImageMemory, nullptr);
@@ -563,12 +586,16 @@ bool IsDeviceSuitable(VkPhysicalDevice device)
     bool extensionsSupported = CheckDeviceExtensionSupport(device);
     bool swapChainIsAdequate = false;
 
+
+    VkPhysicalDeviceFeatures supportedFeatures;
+    vkGetPhysicalDeviceFeatures(device, &supportedFeatures);
+
     if (extensionsSupported) {
         SwapChainSupportDetails swapChainSupport = QuerySwapChainSupport(device);
         swapChainIsAdequate = !swapChainSupport.formats.empty() && !swapChainSupport.presentModes.empty();
     }
 
-    return indices.isComplete() && extensionsSupported && swapChainIsAdequate;
+    return indices.isComplete() && extensionsSupported && swapChainIsAdequate && supportedFeatures.samplerAnisotropy;
 }
 
 void PickPhysicalDevice()
@@ -721,29 +748,10 @@ void CreateSwapChain()
 
 void CreateImageViews()
 {
-    swapChainImageViews.resize(swapChainImages.size());
+   swapChainImageViews.resize(swapChainImages.size());
 
-    for (size_t i = 0; i < swapChainImages.size(); i++) {
-        VkImageViewCreateInfo createInfo = {};
-        createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        createInfo.image = swapChainImages[i];
-        createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        createInfo.format = swapChainImageFormat;
-        createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-        createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-        createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-        createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-        createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        createInfo.subresourceRange.baseMipLevel = 0;
-        createInfo.subresourceRange.levelCount = 1;
-        createInfo.subresourceRange.baseArrayLayer = 0;
-        createInfo.subresourceRange.layerCount = 1;
-
-        if (vkCreateImageView(device, &createInfo, nullptr, &swapChainImageViews[i]) != VK_SUCCESS) {
-
-            printf("Failed to initialize imageview\n");
-            exit(EXIT_FAILURE);
-        }
+    for (uint32_t i = 0; i < swapChainImages.size(); i++) {
+        swapChainImageViews[i] = CreateImageView(swapChainImages[i], swapChainImageFormat);
     }
 }
 
@@ -1534,7 +1542,7 @@ void CreateTextureImage()
 {
     int texWidth, texHeight, texChannels;
 
-    stbi_uc* pixels = stbi_load("res/images/texture.jpg", &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+    stbi_uc* pixels = stbi_load("res/img/texture.jpg", &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
     VkDeviceSize imageSize = texWidth * texHeight * 4;
 
     if (!pixels) {
@@ -1561,6 +1569,39 @@ void CreateTextureImage()
 
     vkDestroyBuffer(device, stagingBuffer, nullptr);
     vkFreeMemory(device, stagingBufferMemory, nullptr);
+}
+
+
+void CreateTextureImageView()
+{
+    textureImageView = CreateImageView(textureImage, VK_FORMAT_R8G8B8A8_SRGB);
+}
+
+void CreateTextureSampler()
+{
+    VkSamplerCreateInfo samplerInfo{};
+    samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    samplerInfo.magFilter = VK_FILTER_LINEAR;
+    samplerInfo.minFilter = VK_FILTER_LINEAR;
+    samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerInfo.anisotropyEnable = VK_TRUE;
+
+    VkPhysicalDeviceProperties properties{};
+    vkGetPhysicalDeviceProperties(physicalDevice, &properties);
+
+    samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
+    samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+    samplerInfo.unnormalizedCoordinates = VK_FALSE;
+    samplerInfo.compareEnable = VK_FALSE;
+    samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+    samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    samplerInfo.mipLodBias = 0.0f;
+    samplerInfo.minLod = 0.0f;
+    samplerInfo.maxLod = 0.0f;
+
+    VK_CHECK(vkCreateSampler(device, &samplerInfo, nullptr, &textureSampler));
 }
 
 int main() {
@@ -1603,6 +1644,8 @@ int main() {
     CreateFrameBuffers();
     CreateCommandPool();
     CreateTextureImage();
+    CreateTextureImageView();
+    CreateTextureSampler();
     CreateVertexBuffer();
     CreateIndexBuffer();
     CreateUniformBuffers();
