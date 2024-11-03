@@ -10,6 +10,7 @@ typedef struct {
     VkSurfaceKHR surface;
     VkQueue presentQueue;
     VkSwapchainKHR swapChain;
+
     std::vector<VkImage> swapChainImages;
     VkFormat swapChainImageFormat;
     VkExtent2D swapChainExtent;
@@ -27,9 +28,7 @@ typedef struct {
     std::vector<VkFence> inFlightFences;
 
     bool framebufferResized = false;
-
     uint32_t currentFrame = 0;
-
     std::vector<Vertex> vertices;
     std::vector<uint32_t> indices;
     VkBuffer vertexBuffer;
