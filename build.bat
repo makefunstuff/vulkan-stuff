@@ -25,4 +25,6 @@ cl /EHsc /std:c++17 /MD -Zi -FC -Fe:main.exe ..\src\main.cpp user32.lib gdi32.li
 ECHO "compiling shaders"
 %VULKAN_SDK%\Bin\glslc.exe ..\res\shaders\shader.vert -o vert.spv
 %VULKAN_SDK%\Bin\glslc.exe ..\res\shaders\shader.frag -o frag.spv
+
+xcopy ..\res res /E /I
 popd

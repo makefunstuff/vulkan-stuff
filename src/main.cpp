@@ -138,8 +138,8 @@ const int MAX_FRAMES_IN_FLIGHT = 2;
 uint32_t g_uWindowWidth = 800;
 uint32_t g_uWindowHeight = 600;
 
-const std::string MODEL_PATH = "res/models/viking_room.obj";
-const std::string TEXTURE_PATH = "res/models/viking_room.png";
+const std::string MODEL_PATH = "./res/models/viking_room.obj";
+const std::string TEXTURE_PATH = "./res/models/viking_room.png";
 
 GLFWwindow* g_window;
 
